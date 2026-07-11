@@ -115,6 +115,19 @@ const unsigned char SECRET_Y[N_LEVELS] = { 168, 184, 192, 176 };
 unsigned char secret_taken[N_LEVELS] = { 0, 0, 0, 0 };
 unsigned char secret_total = 0;   // сколько всего найдено за игру
 
+// ============================================
+//  МЯЧИК: катается туда-сюда по полу. Если задеть --
+//  Данилу мягко отталкивает назад, никакого "game over".
+// ============================================
+#define T_BALL 0xBF
+const unsigned char HAZARD_Y[N_LEVELS]    = { 208, 208, 208, 208 };
+const unsigned char HAZARD_MINX[N_LEVELS] = { 150, 80,  90,  140 };
+const unsigned char HAZARD_MAXX[N_LEVELS] = { 210, 140, 150, 200 };
+unsigned char hazard_x;
+signed char hazard_dir;
+unsigned char hero_bump = 0;   // кадры неуязвимости после отскока
+unsigned char t = 0;           // общий счётчик кадров (анимации, мигание)
+
 // Память игры.
 unsigned char item_taken[N_ITEMS] = { 0,0,0,0,0,0,0,0 };
 unsigned char lvl_found = 0;   // собрано на этом уровне
@@ -139,6 +152,7 @@ unsigned char lvl_total = 0;   // сколько всего на этом уро
 #define SFX_ITEM   2
 #define SFX_SELECT 3
 #define SFX_SECRET 4
+#define SFX_BUMP   5
 
 unsigned char sfx_kind  = SFX_NONE;
 unsigned char sfx_timer = 0;
@@ -152,6 +166,7 @@ void sfx_start(unsigned char kind) {
   sfx_kind  = kind;
   if (kind == SFX_ITEM)        sfx_timer = 12;
   else if (kind == SFX_SECRET) sfx_timer = 16;
+  else if (kind == SFX_BUMP)   sfx_timer = 5;
   else                          sfx_timer = 7;
 }
 
@@ -193,6 +208,14 @@ void sfx_update(void) {
     POKE(SQ2_VOL, 0xBF);
     POKE(SQ2_LO,  period & 0xFF);
     POKE(SQ2_HI,  (period >> 8) & 0x07);
+  }
+  else if (sfx_kind == SFX_BUMP) {
+    // короткий низкий "бонк" -- не страшно, просто отскок
+    vol = sfx_timer + 9;
+    if (vol > 15) vol = 15;
+    POKE(SQ1_VOL, 0xB0 | vol);
+    POKE(SQ1_LO,  900 & 0xFF);
+    POKE(SQ1_HI,  (900 >> 8) & 0x07);
   }
 
   if (!sfx_timer) {
@@ -538,7 +561,18 @@ void start_level(void) {
   pet_vy = 0;
   pet_vsub = 0;
   pet_facing = 0;
+  hazard_x = HAZARD_MINX[level];
+  hazard_dir = 1;
+  hero_bump = 0;
   draw_room();
+}
+
+// Катает мячик туда-сюда по полу между HAZARD_MINX и HAZARD_MAXX.
+void update_hazard(void) {
+  if (!(t & 1)) return;   // едет не спеша -- через кадр
+  hazard_x += hazard_dir;
+  if (hazard_x <= HAZARD_MINX[level]) { hazard_x = HAZARD_MINX[level]; hazard_dir = 1; }
+  if (hazard_x >= HAZARD_MAXX[level]) { hazard_x = HAZARD_MAXX[level]; hazard_dir = -1; }
 }
 
 // Двигает котёнка к точке чуть позади героя, с той же гравитацией,
@@ -581,7 +615,6 @@ void main(void) {
   unsigned char i;
   unsigned char oam_id;
   unsigned char on_ground;
-  unsigned char t = 0;    // счётчик кадров для анимации финала
   int vy = 0;             // вертикальная скорость: 16-е доли пикселя за кадр
   int vsub = 0;           // копилка накопленных долей
 
@@ -678,6 +711,18 @@ void main(void) {
       }
 
       update_pet();
+      update_hazard();
+
+      // Мячик заде́л Данилу -- мягкий отскок назад, без потерь и "game over".
+      if (hero_bump) {
+        --hero_bump;
+      } else if (hero_x + 8 > hazard_x && hazard_x + 8 > hero_x &&
+                 hero_y + 8 > HAZARD_Y[level] && HAZARD_Y[level] + 8 > hero_y) {
+        if (hero_x < hazard_x) { if (hero_x > 10) hero_x -= 10; else hero_x = 0; }
+        else                    { hero_x += 10; }
+        hero_bump = 30;
+        sfx_start(SFX_BUMP);
+      }
 
       // Всё собрано и добежал до правого края -- уровень пройден.
       if (lvl_found == lvl_total && hero_x >= 240) {
@@ -715,9 +760,12 @@ void main(void) {
       oam_id = draw_person(124, 96, NPC_HEAD[i], NPC_BODY[i], NPC_PAL[i], oam_id);
     }
     else if (scene == 1) {
-      oam_id = draw_person(hero_x, hero_y, HERO_HEAD, HERO_BODY, 0, oam_id);
+      if (!hero_bump || (hero_bump & 2)) {   // во время отскока герой мигает
+        oam_id = draw_person(hero_x, hero_y, HERO_HEAD, HERO_BODY, 0, oam_id);
+      }
       oam_id = oam_spr(pet_x, pet_y, (t & 16) ? PET_B : PET_A,
                         2 | (pet_facing ? OAM_FLIP_H : 0), oam_id);
+      oam_id = oam_spr(hazard_x, HAZARD_Y[level], T_BALL, 1, oam_id);
       for (i = 0; i < N_ITEMS; ++i) {
         if (!item_taken[i] && ITEM_LEVEL[i] == level) {
           oam_id = oam_spr(ITEM_X[i], ITEM_Y[i], ITEM_TILE[i], 2, oam_id);
