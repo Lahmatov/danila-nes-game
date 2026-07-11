@@ -103,6 +103,18 @@ const char* ITEM_NAME[N_ITEMS] = {
   "PODAROK VIKI!"   // ПОДАРОК ВИКИ!
 };
 
+// ============================================
+//  СЕКРЕТНЫЙ БОНУС: по одной звёздочке на уровень,
+//  спрятана в стороне от обычного маршрута. Не мешает
+//  пройти уровень -- просто приятная находка для тех,
+//  кто заглянул куда не просили.
+// ============================================
+#define T_SECRET 0xBE
+const unsigned char SECRET_X[N_LEVELS] = { 64,  208, 224, 224 };
+const unsigned char SECRET_Y[N_LEVELS] = { 168, 184, 192, 176 };
+unsigned char secret_taken[N_LEVELS] = { 0, 0, 0, 0 };
+unsigned char secret_total = 0;   // сколько всего найдено за игру
+
 // Память игры.
 unsigned char item_taken[N_ITEMS] = { 0,0,0,0,0,0,0,0 };
 unsigned char lvl_found = 0;   // собрано на этом уровне
@@ -126,16 +138,21 @@ unsigned char lvl_total = 0;   // сколько всего на этом уро
 #define SFX_JUMP   1
 #define SFX_ITEM   2
 #define SFX_SELECT 3
+#define SFX_SECRET 4
 
 unsigned char sfx_kind  = SFX_NONE;
 unsigned char sfx_timer = 0;
 
 // Мелодия находки: три ноты вверх (до-ми-соль), период таймера APU.
 const unsigned int ITEM_NOTES[3] = { 507, 402, 319 };
+// Мелодия секрета: четыре ноты, повеселее и подольше (до-ми-соль-до).
+const unsigned int SECRET_NOTES[4] = { 507, 402, 319, 253 };
 
 void sfx_start(unsigned char kind) {
   sfx_kind  = kind;
-  sfx_timer = (kind == SFX_ITEM) ? 12 : 7;
+  if (kind == SFX_ITEM)        sfx_timer = 12;
+  else if (kind == SFX_SECRET) sfx_timer = 16;
+  else                          sfx_timer = 7;
 }
 
 // Вызывается ровно раз за кадр (перед ppu_wait_nmi), крутит текущий звук.
@@ -168,6 +185,14 @@ void sfx_update(void) {
     POKE(SQ1_VOL, 0xBA);
     POKE(SQ1_LO,  214);
     POKE(SQ1_HI,  0);
+  }
+  else if (sfx_kind == SFX_SECRET) {
+    step = sfx_timer >> 2;
+    if (step > 3) step = 3;
+    period = SECRET_NOTES[3 - step];
+    POKE(SQ2_VOL, 0xBF);
+    POKE(SQ2_LO,  period & 0xFF);
+    POKE(SQ2_HI,  (period >> 8) & 0x07);
   }
 
   if (!sfx_timer) {
@@ -641,6 +666,17 @@ void main(void) {
         }
       }
 
+      // Секретная звёздочка -- необязательная, не мешает пройти уровень.
+      if (!secret_taken[level] &&
+          hero_x + 8 > SECRET_X[level] && SECRET_X[level] + 8 > hero_x &&
+          hero_y + 8 > SECRET_Y[level] && SECRET_Y[level] + 8 > hero_y) {
+        secret_taken[level] = 1;
+        ++secret_total;
+        talking = 1;
+        sfx_start(SFX_SECRET);
+        show_window("SEKRET!", "TY NAWYOL ZVEZDOCHKU!", "MOLODEC, ISSLEDOVATEL'!");
+      }
+
       update_pet();
 
       // Всё собрано и добежал до правого края -- уровень пройден.
@@ -686,6 +722,9 @@ void main(void) {
         if (!item_taken[i] && ITEM_LEVEL[i] == level) {
           oam_id = oam_spr(ITEM_X[i], ITEM_Y[i], ITEM_TILE[i], 2, oam_id);
         }
+      }
+      if (!secret_taken[level] && (t & 8)) {   // мерцает -- всё-таки секрет
+        oam_id = oam_spr(SECRET_X[level], SECRET_Y[level], T_SECRET, 2, oam_id);
       }
       oam_id = oam_spr(16, 16, '0' + lvl_found, 0, oam_id);
       oam_id = oam_spr(24, 16, '/', 0, oam_id);
