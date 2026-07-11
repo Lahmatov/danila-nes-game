@@ -23,6 +23,8 @@
 #define T_WINDOW  0xBA     // окно со звёздами
 #define T_RUG     0xBB     // коврик
 #define T_CRIB    0xBC     // кроватка (можно стоять)
+#define PET_A     0xAE     // котёнок-компаньон, кадр 1
+#define PET_B     0xAF     // котёнок-компаньон, кадр 2 (хвостик)
 #define PORTRAIT  0xC0     // портрет 6x6 тайлов
 
 // --- Палитра ---
@@ -491,6 +493,12 @@ unsigned char draw_person(unsigned char px, unsigned char py,
 
 // Начало уровня: считаем предметы, ставим героя у левого края.
 unsigned char hero_x, hero_y;
+
+// Котёнок-компаньон: бежит следом за Данилой, держась чуть позади.
+unsigned char pet_x, pet_y;
+int pet_vy, pet_vsub;
+unsigned char pet_facing;   // 0 -- смотрит вправо, 1 -- влево
+
 void start_level(void) {
   unsigned char i;
   lvl_found = 0;
@@ -500,7 +508,45 @@ void start_level(void) {
   }
   hero_x = 16;
   hero_y = 208;
+  pet_x = 0;
+  pet_y = 208;
+  pet_vy = 0;
+  pet_vsub = 0;
+  pet_facing = 0;
   draw_room();
+}
+
+// Двигает котёнка к точке чуть позади героя, с той же гравитацией,
+// что и у героя, но без прыжков -- просто бежит и падает на пол.
+void update_pet(void) {
+  unsigned char on_ground_pet;
+  int target;
+
+  target = hero_x - 16;
+  if (target < 0) target = 0;
+
+  if (pet_x < target && !is_wall(pet_x + 8, pet_y) && !is_wall(pet_x + 8, pet_y + 7)) {
+    ++pet_x;
+    pet_facing = 0;
+  } else if (pet_x > target && !is_wall(pet_x - 1, pet_y) && !is_wall(pet_x - 1, pet_y + 7)) {
+    --pet_x;
+    pet_facing = 1;
+  }
+
+  on_ground_pet = is_wall(pet_x, pet_y + 8) || is_wall(pet_x + 7, pet_y + 8);
+  if (on_ground_pet) {
+    pet_vy = 0;
+    pet_vsub = 0;
+  } else {
+    pet_vy += 3;
+    if (pet_vy > 64) pet_vy = 64;
+  }
+  pet_vsub += pet_vy;
+  while (pet_vsub >= 16) {
+    pet_vsub -= 16;
+    if (!is_wall(pet_x, pet_y + 8) && !is_wall(pet_x + 7, pet_y + 8)) ++pet_y;
+    else pet_vsub = 0;
+  }
 }
 
 void main(void) {
@@ -595,6 +641,8 @@ void main(void) {
         }
       }
 
+      update_pet();
+
       // Всё собрано и добежал до правого края -- уровень пройден.
       if (lvl_found == lvl_total && hero_x >= 240) {
         ++level;
@@ -632,6 +680,8 @@ void main(void) {
     }
     else if (scene == 1) {
       oam_id = draw_person(hero_x, hero_y, HERO_HEAD, HERO_BODY, 0, oam_id);
+      oam_id = oam_spr(pet_x, pet_y, (t & 16) ? PET_B : PET_A,
+                        2 | (pet_facing ? OAM_FLIP_H : 0), oam_id);
       for (i = 0; i < N_ITEMS; ++i) {
         if (!item_taken[i] && ITEM_LEVEL[i] == level) {
           oam_id = oam_spr(ITEM_X[i], ITEM_Y[i], ITEM_TILE[i], 2, oam_id);
