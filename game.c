@@ -8,6 +8,7 @@
 // ============================================
 
 #include "neslib.h"        // библиотека NES: спрайты, палитры, геймпад
+#include <peekpoke.h>      // POKE() -- пишем звук прямо в регистры APU
 
 //#link "chr_ru.s"         // наш набор тайлов: буквы + вся графика игры
 
@@ -104,6 +105,75 @@ const char* ITEM_NAME[N_ITEMS] = {
 unsigned char item_taken[N_ITEMS] = { 0,0,0,0,0,0,0,0 };
 unsigned char lvl_found = 0;   // собрано на этом уровне
 unsigned char lvl_total = 0;   // сколько всего на этом уровне
+
+// ============================================
+//  ПРОСТОЙ ЗВУК: пишем прямо в APU, без FamiTone
+//  (FamiToneUpdate выключен в neslib.sinc, чтобы не
+//  затирал регистры каждый кадр).
+// ============================================
+#define APU_SND_CHN 0x4015
+#define SQ1_VOL     0x4000
+#define SQ1_SWEEP   0x4001
+#define SQ1_LO      0x4002
+#define SQ1_HI      0x4003
+#define SQ2_VOL     0x4004
+#define SQ2_LO      0x4006
+#define SQ2_HI      0x4007
+
+#define SFX_NONE   0
+#define SFX_JUMP   1
+#define SFX_ITEM   2
+#define SFX_SELECT 3
+
+unsigned char sfx_kind  = SFX_NONE;
+unsigned char sfx_timer = 0;
+
+// Мелодия находки: три ноты вверх (до-ми-соль), период таймера APU.
+const unsigned int ITEM_NOTES[3] = { 507, 402, 319 };
+
+void sfx_start(unsigned char kind) {
+  sfx_kind  = kind;
+  sfx_timer = (kind == SFX_ITEM) ? 12 : 7;
+}
+
+// Вызывается ровно раз за кадр (перед ppu_wait_nmi), крутит текущий звук.
+void sfx_update(void) {
+  unsigned char step, vol;
+  unsigned int period;
+
+  if (!sfx_timer) return;
+  --sfx_timer;
+
+  if (sfx_kind == SFX_JUMP) {
+    // Пикирующий свист вверх: период уменьшается -- тон растёт.
+    period = 300 - (unsigned int)(6 - sfx_timer) * 28;
+    if (period < 110) period = 110;
+    vol = sfx_timer + 8;
+    if (vol > 15) vol = 15;
+    POKE(SQ1_VOL, 0xB0 | vol);
+    POKE(SQ1_LO,  period & 0xFF);
+    POKE(SQ1_HI,  (period >> 8) & 0x07);
+  }
+  else if (sfx_kind == SFX_ITEM) {
+    step = sfx_timer >> 2;
+    if (step > 2) step = 2;
+    period = ITEM_NOTES[2 - step];
+    POKE(SQ2_VOL, 0xBF);
+    POKE(SQ2_LO,  period & 0xFF);
+    POKE(SQ2_HI,  (period >> 8) & 0x07);
+  }
+  else if (sfx_kind == SFX_SELECT) {
+    POKE(SQ1_VOL, 0xBA);
+    POKE(SQ1_LO,  214);
+    POKE(SQ1_HI,  0);
+  }
+
+  if (!sfx_timer) {
+    POKE(SQ1_VOL, 0xB0);   // тишина в конце
+    POKE(SQ2_VOL, 0xB0);
+    sfx_kind = SFX_NONE;
+  }
+}
 
 // ============================================
 //  КАРТЫ УРОВНЕЙ (вид сбоку)
@@ -475,6 +545,7 @@ void main(void) {
         scene = 1;
         vy = 0;
         vsub = 0;
+        sfx_start(SFX_SELECT);
         start_level();
       }
     }
@@ -490,7 +561,7 @@ void main(void) {
       on_ground = is_wall(hero_x, hero_y + 8) || is_wall(hero_x + 7, hero_y + 8);
       if (on_ground) {
         if (vy > 0) { vy = 0; vsub = 0; }
-        if (pad_t & PAD_A) vy = -52;        // прыжок
+        if (pad_t & PAD_A) { vy = -52; sfx_start(SFX_JUMP); }        // прыжок
       } else {
         vy += 3;                            // гравитация
         if (vy > 64) vy = 64;
@@ -515,6 +586,7 @@ void main(void) {
           item_taken[i] = 1;
           ++lvl_found;
           talking = 1;
+          sfx_start(SFX_ITEM);
           if (lvl_found == lvl_total) {
             show_window("NAHODKA!", ITEM_NAME[i], "SOBRANO! BEGI VPRAVO!");   // СОБРАНО! БЕГИ ВПРАВО!
           } else {
@@ -583,6 +655,7 @@ void main(void) {
       oam_id = oam_spr(128 + i, 180, T_STROL_R, 2, oam_id);
     }
 
+    sfx_update();
     ppu_wait_nmi();
   }
 }

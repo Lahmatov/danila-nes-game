@@ -125,7 +125,11 @@ nmi:
 
 @skipNtsc:
 
-	jsr FamiToneUpdate
+	; FamiToneUpdate отключён: игра не использует музыку/сэмплы FamiTone,
+	; а простые звуки (прыжок, находка) пишутся в APU напрямую из game.c.
+	; Если оставить этот вызов, FamiToneUpdate каждый кадр перезатирает
+	; регистры каналов и глушит наши POKE.
+	; jsr FamiToneUpdate
 
 	pla
 	tay
