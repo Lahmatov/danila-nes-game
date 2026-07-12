@@ -864,8 +864,7 @@ void draw_minigame_bg(unsigned char fill_tile, unsigned char lane_col) {
 
 void start_bike(void) {
   unsigned char i;
-  bank_bg(1);
-  bank_spr(1);
+  bank_bg(1);   // спрайты остаются в обычном банке -- Даню видно как в игре
   bike_lane = 1;
   bike_timer = 600;   // 10 секунд при 60 к/с
   bike_bump = 0;
@@ -910,14 +909,13 @@ void draw_bike(void) {
   unsigned char i, oam_id;
   oam_clear();
   oam_id = 0;
-  if (!bike_bump || (bike_bump & 2)) {
-    oam_id = oam_spr(BIKE_LANE_X[bike_lane], BIKE_Y,
-                      (t & 8) ? MG_BIKE_B : MG_BIKE_A, 0, oam_id);
+  if (!bike_bump || (bike_bump & 2)) {   // тот же Даня, что и в игре
+    oam_id = draw_person(BIKE_LANE_X[bike_lane], BIKE_Y, HERO_HEAD, HERO_BODY, 0, oam_id);
   }
   for (i = 0; i < N_OBST; ++i) {
     if (obst_y[i] >= -8 && obst_y[i] < 224) {
       oam_id = oam_spr(BIKE_LANE_X[obst_lane[i]], (unsigned char)obst_y[i],
-                        MG_OBSTACLE, 2, oam_id);
+                        T_BOX, 2, oam_id);
     }
   }
   i = bike_timer / 60;
@@ -933,8 +931,10 @@ signed char tennis_vx, tennis_vy;
 unsigned char tennis_rally;
 
 void start_tennis(void) {
-  bank_bg(1);
-  bank_spr(1);
+  bank_bg(1);   // спрайты остаются в обычном банке -- Даню видно как в игре
+  pal_col(1, 0x11);   // фон 0 временно -- синий корт
+  pal_col(2, 0x01);
+  pal_col(3, 0x30);
   tennis_paddle_y = 100;
   tennis_ball_x = 40;
   tennis_ball_y = 100;
@@ -962,7 +962,7 @@ unsigned char update_tennis(unsigned char pad, unsigned char pad_t) {
   if (tennis_ball_x <= 20) tennis_vx = 1;   // отскок от стены слева
 
   if (tennis_ball_x >= TENNIS_PADDLE_X - 8) {
-    if (tennis_ball_y + 8 > tennis_paddle_y && tennis_paddle_y + 24 > tennis_ball_y) {
+    if (tennis_ball_y + 8 > tennis_paddle_y && tennis_paddle_y + 16 > tennis_ball_y) {
       tennis_vx = -1;
       ++tennis_rally;
       sfx_start(SFX_SELECT);
@@ -980,10 +980,8 @@ void draw_tennis(void) {
   unsigned char oam_id;
   oam_clear();
   oam_id = 0;
-  oam_id = oam_spr(TENNIS_PADDLE_X, tennis_paddle_y, MG_PADDLE, 0, oam_id);
-  oam_id = oam_spr(TENNIS_PADDLE_X, tennis_paddle_y + 8, MG_PADDLE, 0, oam_id);
-  oam_id = oam_spr(TENNIS_PADDLE_X, tennis_paddle_y + 16, MG_PADDLE, 0, oam_id);
-  oam_id = oam_spr((unsigned char)tennis_ball_x, (unsigned char)tennis_ball_y, MG_BALL, 2, oam_id);
+  oam_id = draw_person(TENNIS_PADDLE_X, tennis_paddle_y + 8, HERO_HEAD, HERO_BODY, 0, oam_id);
+  oam_id = oam_spr((unsigned char)tennis_ball_x, (unsigned char)tennis_ball_y, T_BALL, 1, oam_id);
   oam_id = oam_spr(16, 16, '0' + tennis_rally, 0, oam_id);
   oam_id = oam_spr(24, 16, '/', 0, oam_id);
   oam_id = oam_spr(32, 16, '0' + TENNIS_GOAL, 0, oam_id);
@@ -1005,8 +1003,7 @@ unsigned char foot_scored;
 unsigned char foot_attempts;
 
 void start_football(void) {
-  bank_bg(1);
-  bank_spr(1);
+  bank_bg(1);   // спрайты остаются в обычном банке -- Даню видно как в игре
   pal_col(1, 0x1A);   // фон 0 временно -- зелёная трава
   pal_col(2, 0x0A);
   pal_col(3, 0x30);
@@ -1071,12 +1068,14 @@ void draw_football(void) {
   unsigned char oam_id;
   oam_clear();
   oam_id = 0;
-  oam_id = oam_spr(FOOT_LANE_X[foot_keeper_lane], FOOT_KEEPER_Y,
-                    (t & 16) ? MG_KEEPER_B : MG_KEEPER_A, 0, oam_id);
+  // Папа Женя -- вратарь, тот же спрайт, что и на заставках уровней.
+  oam_id = draw_person(FOOT_LANE_X[foot_keeper_lane], FOOT_KEEPER_Y + 8, 0xA8, 0xA9, 3, oam_id);
+  // Даня -- бьёт по мячу, стоит в выбранной полосе.
+  oam_id = draw_person(FOOT_LANE_X[foot_target], FOOT_BALL_Y0 + 16, HERO_HEAD, HERO_BODY, 0, oam_id);
   if (foot_phase == 1) {
-    oam_id = oam_spr(FOOT_LANE_X[foot_target], (unsigned char)foot_ball_y, MG_FBALL, 2, oam_id);
+    oam_id = oam_spr(FOOT_LANE_X[foot_target], (unsigned char)foot_ball_y, T_BALL, 1, oam_id);
   } else {
-    oam_id = oam_spr(FOOT_LANE_X[foot_target], FOOT_BALL_Y0, MG_FBALL, 2, oam_id);
+    oam_id = oam_spr(FOOT_LANE_X[foot_target], FOOT_BALL_Y0, T_BALL, 1, oam_id);
   }
   oam_id = oam_spr(16, 16, '0' + foot_scored, 0, oam_id);
   oam_id = oam_spr(24, 16, '/', 0, oam_id);
