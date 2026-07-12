@@ -759,6 +759,350 @@ void update_pet(void) {
   }
 }
 
+// ============================================
+//  МИНИ-ИГРЫ: между "детской" и "кухней" (level==2).
+//  Свой набор графики во втором банке тайлов (256..511,
+//  см. build/minigames_chr.py) -- переключается bank_bg()/
+//  bank_spr(), поэтому не мешает основной комнатной графике.
+//  Цифры 0..9 продублированы в банке 2 на тех же местах, так
+//  что счёт рисуется тем же приёмом oam_spr(x,y,'0'+n,...).
+// ============================================
+#define MG_BIKE     0
+#define MG_TENNIS   1
+#define MG_FOOTBALL 2
+#define MG_DONE     3
+
+unsigned char minigame_stage = MG_BIKE;
+unsigned char minigames_done = 0;
+
+#define MG_BIKE_A   0x01
+#define MG_BIKE_B   0x02
+#define MG_OBSTACLE 0x03
+#define MG_ROAD     0x04
+#define MG_LANE     0x05
+#define MG_PADDLE   0x06
+#define MG_NET      0x07
+#define MG_BALL     0x08
+#define MG_GOAL_L   0x09
+#define MG_GOAL_R   0x0A
+#define MG_KEEPER_A 0x0B
+#define MG_KEEPER_B 0x0C
+#define MG_FBALL    0x0D
+#define MG_GRASS    0x0E
+
+const unsigned char MG_TITLE[3][20] = {
+  "VELOGONKA!         ",   // ВЕЛОГОНКА!
+  "TENNIS!             ",  // ТЕННИС!
+  "FUTBOL!             "   // ФУТБОЛ!
+};
+
+// Рисует экран-заглушку перед мини-игрой (обычным, первым банком).
+void draw_minigame_intro(void) {
+  ppu_off();
+  vram_adr(NTADR_A(0, 0));
+  vram_fill(' ', 960);
+  if (minigame_stage == MG_BIKE) {
+    vram_adr(NTADR_A(7, 8));
+    put_ru("DANILA KATAETSYA NA MTB!");   // ДАНИЛА КАТАЕТСЯ НА МТБ!
+    vram_adr(NTADR_A(3, 11));
+    put_ru("KNOPKI VLEVO/VPRAVO --");     // КНОПКИ ВЛЕВО/ВПРАВО --
+    vram_adr(NTADR_A(3, 13));
+    put_ru("PEREPRYGIVAJ MEZHDU POLOS!"); // ПЕРЕПРЫГИВАЙ МЕЖДУ ПОЛОС!
+  } else if (minigame_stage == MG_TENNIS) {
+    vram_adr(NTADR_A(10, 8));
+    put_ru("TENNIS!");                    // ТЕННИС!
+    vram_adr(NTADR_A(3, 11));
+    put_ru("KNOPKI VVERH/VNIZ --");       // КНОПКИ ВВЕРХ/ВНИЗ --
+    vram_adr(NTADR_A(3, 13));
+    put_ru("LOVI MYACH RAKETKOJ!");       // ЛОВИ МЯЧ РАКЕТКОЙ!
+  } else {
+    vram_adr(NTADR_A(10, 8));
+    put_ru("FUTBOL!");                    // ФУТБОЛ!
+    vram_adr(NTADR_A(3, 11));
+    put_ru("VLEVO/VPRAVO -- CEL',");      // ВЛЕВО/ВПРАВО -- ЦЕЛЬ,
+    vram_adr(NTADR_A(3, 13));
+    put_ru("KNOPKA A -- UDAR!");          // КНОПКА A -- УДАР!
+  }
+  vram_adr(NTADR_A(9, 20));
+  put_ru("NAZHMI KNOPKU A");              // НАЖМИ КНОПКУ А
+  vram_adr(0x23C0);
+  vram_fill(0, 64);
+  ppu_on_all();
+}
+
+// ------------ ВЕЛОИГРА: 3 полосы, уклоняемся от камней ------------
+#define N_OBST 3
+const unsigned char BIKE_LANE_X[3] = { 56, 120, 184 };
+#define BIKE_Y 192
+unsigned char bike_lane;
+unsigned char obst_lane[N_OBST];
+int obst_y[N_OBST];
+unsigned int bike_timer;
+unsigned char bike_bump;
+
+void draw_minigame_bg(unsigned char fill_tile, unsigned char lane_col) {
+  unsigned char row, col;
+  unsigned char buf[32];
+  for (col = 0; col < 32; ++col) buf[col] = fill_tile;
+  ppu_off();
+  for (row = 0; row < 30; ++row) {
+    vram_adr(NTADR_A(0, row));
+    vram_write(buf, 32);
+  }
+  if (lane_col) {
+    for (row = 0; row < 30; ++row) {
+      vram_adr(NTADR_A(9, row));
+      vram_put(MG_LANE);
+      vram_adr(NTADR_A(17, row));
+      vram_put(MG_LANE);
+    }
+  }
+  vram_adr(0x23C0);
+  vram_fill(0, 64);
+  ppu_on_all();
+}
+
+void start_bike(void) {
+  unsigned char i;
+  bank_bg(1);
+  bank_spr(1);
+  bike_lane = 1;
+  bike_timer = 600;   // 10 секунд при 60 к/с
+  bike_bump = 0;
+  for (i = 0; i < N_OBST; ++i) {
+    obst_lane[i] = rand8() % 3;
+    obst_y[i] = -((int)i * 60) - 16;
+  }
+  draw_minigame_bg(MG_ROAD, 1);
+}
+
+// Возвращает 1, когда мини-игра завершена.
+unsigned char update_bike(unsigned char pad, unsigned char pad_t) {
+  unsigned char i;
+
+  if (pad_t & PAD_LEFT)  { if (bike_lane > 0) --bike_lane; }
+  if (pad_t & PAD_RIGHT) { if (bike_lane < 2) ++bike_lane; }
+
+  if (t & 1) {
+    for (i = 0; i < N_OBST; ++i) {
+      obst_y[i] += 2;
+      if (obst_y[i] > 224) {
+        obst_y[i] = -16;
+        obst_lane[i] = rand8() % 3;
+      }
+    }
+  }
+
+  if (bike_bump) --bike_bump;
+  for (i = 0; i < N_OBST; ++i) {
+    if (!bike_bump && obst_lane[i] == bike_lane &&
+        obst_y[i] + 8 > BIKE_Y && BIKE_Y + 8 > obst_y[i]) {
+      bike_bump = 30;
+      sfx_start(SFX_BUMP);
+    }
+  }
+
+  if (bike_timer) --bike_timer;
+  return bike_timer == 0;
+}
+
+void draw_bike(void) {
+  unsigned char i, oam_id;
+  oam_clear();
+  oam_id = 0;
+  if (!bike_bump || (bike_bump & 2)) {
+    oam_id = oam_spr(BIKE_LANE_X[bike_lane], BIKE_Y,
+                      (t & 8) ? MG_BIKE_B : MG_BIKE_A, 0, oam_id);
+  }
+  for (i = 0; i < N_OBST; ++i) {
+    if (obst_y[i] >= -8 && obst_y[i] < 224) {
+      oam_id = oam_spr(BIKE_LANE_X[obst_lane[i]], (unsigned char)obst_y[i],
+                        MG_OBSTACLE, 2, oam_id);
+    }
+  }
+  i = bike_timer / 60;
+  oam_id = oam_spr(16, 16, '0' + i, 0, oam_id);
+}
+
+// ------------ ТЕННИС: отбивай мяч ракеткой ------------
+#define TENNIS_GOAL 5
+#define TENNIS_PADDLE_X 224
+unsigned char tennis_paddle_y;
+int tennis_ball_x, tennis_ball_y;
+signed char tennis_vx, tennis_vy;
+unsigned char tennis_rally;
+
+void start_tennis(void) {
+  bank_bg(1);
+  bank_spr(1);
+  tennis_paddle_y = 100;
+  tennis_ball_x = 40;
+  tennis_ball_y = 100;
+  tennis_vx = 1;
+  tennis_vy = 1;
+  tennis_rally = 0;
+  draw_minigame_bg(MG_ROAD, 0);
+  ppu_off();
+  { unsigned char row;
+    for (row = 0; row < 30; ++row) {
+      vram_adr(NTADR_A(2, row));
+      vram_put(MG_NET);
+    }
+  }
+  ppu_on_all();
+}
+
+unsigned char update_tennis(unsigned char pad, unsigned char pad_t) {
+  if (pad & PAD_UP)   { if (tennis_paddle_y > 24)  tennis_paddle_y -= 2; }
+  if (pad & PAD_DOWN) { if (tennis_paddle_y < 200) tennis_paddle_y += 2; }
+
+  tennis_ball_x += tennis_vx;
+  tennis_ball_y += tennis_vy;
+  if (tennis_ball_y <= 16 || tennis_ball_y >= 216) tennis_vy = -tennis_vy;
+  if (tennis_ball_x <= 20) tennis_vx = 1;   // отскок от стены слева
+
+  if (tennis_ball_x >= TENNIS_PADDLE_X - 8) {
+    if (tennis_ball_y + 8 > tennis_paddle_y && tennis_paddle_y + 24 > tennis_ball_y) {
+      tennis_vx = -1;
+      ++tennis_rally;
+      sfx_start(SFX_SELECT);
+    } else if (tennis_ball_x > 250) {
+      tennis_ball_x = 40;
+      tennis_ball_y = 100;
+      tennis_vx = 1;
+    }
+  }
+
+  return tennis_rally >= TENNIS_GOAL;
+}
+
+void draw_tennis(void) {
+  unsigned char oam_id;
+  oam_clear();
+  oam_id = 0;
+  oam_id = oam_spr(TENNIS_PADDLE_X, tennis_paddle_y, MG_PADDLE, 0, oam_id);
+  oam_id = oam_spr(TENNIS_PADDLE_X, tennis_paddle_y + 8, MG_PADDLE, 0, oam_id);
+  oam_id = oam_spr(TENNIS_PADDLE_X, tennis_paddle_y + 16, MG_PADDLE, 0, oam_id);
+  oam_id = oam_spr((unsigned char)tennis_ball_x, (unsigned char)tennis_ball_y, MG_BALL, 2, oam_id);
+  oam_id = oam_spr(16, 16, '0' + tennis_rally, 0, oam_id);
+  oam_id = oam_spr(24, 16, '/', 0, oam_id);
+  oam_id = oam_spr(32, 16, '0' + TENNIS_GOAL, 0, oam_id);
+}
+
+// ------------ ФУТБОЛ: выбери сторону и бей ------------
+#define FOOT_GOAL 3
+#define FOOT_MAX_ATTEMPTS 6
+const unsigned char FOOT_LANE_X[3] = { 56, 120, 184 };
+#define FOOT_KEEPER_Y 32
+#define FOOT_BALL_Y0  192
+unsigned char foot_target;
+unsigned char foot_keeper_lane;
+signed char foot_keeper_dir;
+unsigned char foot_phase;        // 0 -- выбор цели, 1 -- удар летит, 2 -- пауза
+unsigned char foot_phase_timer;
+int foot_ball_y;
+unsigned char foot_scored;
+unsigned char foot_attempts;
+
+void start_football(void) {
+  bank_bg(1);
+  bank_spr(1);
+  pal_col(1, 0x1A);   // фон 0 временно -- зелёная трава
+  pal_col(2, 0x0A);
+  pal_col(3, 0x30);
+  foot_target = 1;
+  foot_keeper_lane = 0;
+  foot_keeper_dir = 1;
+  foot_phase = 0;
+  foot_phase_timer = 0;
+  foot_ball_y = FOOT_BALL_Y0;
+  foot_scored = 0;
+  foot_attempts = 0;
+  draw_minigame_bg(MG_GRASS, 0);
+  ppu_off();
+  vram_adr(NTADR_A(5, 3));
+  vram_put(MG_GOAL_L);
+  vram_adr(NTADR_A(25, 3));
+  vram_put(MG_GOAL_R);
+  ppu_on_all();
+}
+
+unsigned char update_football(unsigned char pad, unsigned char pad_t) {
+  if (foot_phase == 0) {
+    if (pad_t & PAD_LEFT)  { if (foot_target > 0) --foot_target; }
+    if (pad_t & PAD_RIGHT) { if (foot_target < 2) ++foot_target; }
+    if (pad_t & PAD_A) {
+      foot_phase = 1;
+      foot_ball_y = FOOT_BALL_Y0;
+      sfx_start(SFX_JUMP);
+    }
+  }
+
+  if (t & 1) {
+    if (foot_keeper_dir > 0) {
+      if (foot_keeper_lane < 2) ++foot_keeper_lane; else foot_keeper_dir = -1;
+    } else {
+      if (foot_keeper_lane > 0) --foot_keeper_lane; else foot_keeper_dir = 1;
+    }
+  }
+
+  if (foot_phase == 1) {
+    foot_ball_y -= 4;
+    if (foot_ball_y <= FOOT_KEEPER_Y) {
+      ++foot_attempts;
+      if (foot_keeper_lane != foot_target) {
+        ++foot_scored;
+        sfx_start(SFX_SECRET);
+      } else {
+        sfx_start(SFX_BUMP);
+      }
+      foot_phase = 2;
+      foot_phase_timer = 40;
+    }
+  } else if (foot_phase == 2) {
+    if (foot_phase_timer) --foot_phase_timer;
+    else foot_phase = 0;
+  }
+
+  return foot_scored >= FOOT_GOAL || foot_attempts >= FOOT_MAX_ATTEMPTS;
+}
+
+void draw_football(void) {
+  unsigned char oam_id;
+  oam_clear();
+  oam_id = 0;
+  oam_id = oam_spr(FOOT_LANE_X[foot_keeper_lane], FOOT_KEEPER_Y,
+                    (t & 16) ? MG_KEEPER_B : MG_KEEPER_A, 0, oam_id);
+  if (foot_phase == 1) {
+    oam_id = oam_spr(FOOT_LANE_X[foot_target], (unsigned char)foot_ball_y, MG_FBALL, 2, oam_id);
+  } else {
+    oam_id = oam_spr(FOOT_LANE_X[foot_target], FOOT_BALL_Y0, MG_FBALL, 2, oam_id);
+  }
+  oam_id = oam_spr(16, 16, '0' + foot_scored, 0, oam_id);
+  oam_id = oam_spr(24, 16, '/', 0, oam_id);
+  oam_id = oam_spr(32, 16, '0' + FOOT_GOAL, 0, oam_id);
+}
+
+// Экран "молодец!" между мини-играми -- обычным банком тайлов.
+void draw_minigame_congrats(void) {
+  bank_bg(0);
+  bank_spr(0);
+  pal_all(PALETTE);
+  ppu_off();
+  vram_adr(NTADR_A(0, 0));
+  vram_fill(' ', 960);
+  vram_adr(0x23C0);
+  vram_fill(0, 64);
+  ppu_on_all();
+  if (minigame_stage == MG_BIKE) {
+    show_window("MOLODEC!", "PROEHAL VELOTRASSU!", "EDEM DAL'WE!");
+  } else if (minigame_stage == MG_TENNIS) {
+    show_window("MOLODEC!", "OTLICHNAYA IGRA!", "EDEM DAL'WE!");
+  } else {
+    show_window("MOLODEC!", "SLAVNYJ FUTBOLIST!", "EDEM DAL'WE!");
+  }
+}
+
 void main(void) {
   unsigned char pad;
   unsigned char pad_t;
@@ -879,7 +1223,12 @@ void main(void) {
       // Всё собрано и добежал до правого края -- уровень пройден.
       if (lvl_found == lvl_total && hero_x >= 240) {
         ++level;
-        if (level < N_LEVELS) {
+        if (level == 2 && !minigames_done) {
+          // Между "детской" и "кухней" -- три мини-игры подряд.
+          minigame_stage = MG_BIKE;
+          scene = 3;
+          draw_minigame_intro();
+        } else if (level < N_LEVELS) {
           scene = 0;
           draw_card();
         } else {
@@ -888,11 +1237,47 @@ void main(void) {
         }
       }
     }
-    else {
+    else if (scene == 3) {
+      // ===== МИНИ-ИГРА: экран-заглушка, ждём A =====
+      if (pad_t & PAD_A) {
+        scene = 4;
+        sfx_start(SFX_SELECT);
+        if (minigame_stage == MG_BIKE) start_bike();
+        else if (minigame_stage == MG_TENNIS) start_tennis();
+        else start_football();
+      }
+    }
+    else if (scene == 4) {
+      // ===== МИНИ-ИГРА: сама игра =====
+      unsigned char mg_done = 0;
+      if (minigame_stage == MG_BIKE) mg_done = update_bike(pad, pad_t);
+      else if (minigame_stage == MG_TENNIS) mg_done = update_tennis(pad, pad_t);
+      else mg_done = update_football(pad, pad_t);
+      if (mg_done) {
+        scene = 5;
+        draw_minigame_congrats();
+      }
+    }
+    else if (scene == 5) {
+      // ===== МИНИ-ИГРА: "молодец!", ждём A и едем дальше =====
+      if (pad_t & PAD_A) {
+        if (minigame_stage < MG_FOOTBALL) {
+          ++minigame_stage;
+          scene = 3;
+          draw_minigame_intro();
+        } else {
+          minigames_done = 1;
+          scene = 0;
+          draw_card();
+        }
+      }
+    }
+    else if (scene == 2) {
       // ===== ФИНАЛ: START -- начать заново =====
       if (pad_t & PAD_START) {
         for (i = 0; i < N_ITEMS; ++i) item_taken[i] = 0;
         level = 0;
+        minigames_done = 0;
         scene = 0;
         draw_title();
         while (1) {
@@ -931,7 +1316,7 @@ void main(void) {
       oam_id = oam_spr(24, 16, '/', 0, oam_id);
       oam_id = oam_spr(32, 16, '0' + lvl_total, 0, oam_id);
     }
-    else {
+    else if (scene == 2) {
       // ===== МИНИ-ВИДЕО: Данила качает коляску =====
       // Каждые полсекунды коляска смещается на пиксель --
       // получается покачивание. i здесь -- смещение 0 или 1.
@@ -944,6 +1329,13 @@ void main(void) {
       oam_id = oam_spr(120 + i, 180, T_STROL_L, 2, oam_id);    // коляска
       oam_id = oam_spr(128 + i, 180, T_STROL_R, 2, oam_id);
     }
+    else if (scene == 4) {
+      // ===== МИНИ-ИГРА: сама отрисовка (свой банк тайлов) =====
+      if (minigame_stage == MG_BIKE) draw_bike();
+      else if (minigame_stage == MG_TENNIS) draw_tennis();
+      else draw_football();
+    }
+    // scene == 3 и scene == 5 -- текстовые экраны мини-игр, спрайты не нужны
 
     sfx_update();
     music_update();
