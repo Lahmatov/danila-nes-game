@@ -226,6 +226,65 @@ void sfx_update(void) {
 }
 
 // ============================================
+//  ФОНОВАЯ МУЗЫКА: играет на треугольном канале
+//  (SQ1/SQ2 заняты звуковыми эффектами выше, TRI
+//  свободен -- конфликтов нет, эффекты и музыка
+//  звучат одновременно).
+//  Собственная весёлая тема "про цыплёнка": не
+//  повторяет чужую мелодию, просто в похожем
+//  озорном скачущем настроении.
+// ============================================
+#define TRI_LINEAR 0x4008
+#define TRI_LO     0x400A
+#define TRI_HI     0x400B
+
+#define N_REST 0
+#define N_C4  213
+#define N_D4  190
+#define N_E4  169
+#define N_F4  159
+#define N_G4  142
+#define N_A4  126
+#define N_B4  112
+#define N_C5  106
+
+#define MUSIC_LEN 30
+const unsigned int MUSIC_NOTE[MUSIC_LEN] = {
+  N_C4, N_C4, N_E4, N_E4, N_G4, N_G4, N_E4,               // куд-куда, куд-куда
+  N_C4, N_D4, N_E4, N_F4, N_G4, N_A4, N_B4, N_C5,          // взлетаем вверх
+  N_G4, N_G4, N_E4, N_E4, N_C4, N_C4, N_D4,                // куд-куда ещё раз
+  N_C5, N_B4, N_A4, N_G4, N_F4, N_E4, N_D4, N_C4           // и спускаемся домой
+};
+const unsigned char MUSIC_DUR[MUSIC_LEN] = {
+  6,6,6,6,6,6,9,
+  7,7,7,7,7,7,7,9,
+  6,6,6,6,6,6,9,
+  7,7,7,7,7,7,7,24
+};
+
+unsigned char music_pos   = 0;
+unsigned char music_timer = 0;
+
+// Раз в кадр продвигает мелодию и переигрывает ноту на треугольнике.
+void music_update(void) {
+  unsigned int period;
+
+  if (music_timer) {
+    --music_timer;
+    return;
+  }
+
+  period = MUSIC_NOTE[music_pos];
+  POKE(TRI_LINEAR, 0xFF);
+  POKE(TRI_LO, period & 0xFF);
+  POKE(TRI_HI, (period >> 8) & 0x07);
+
+  music_timer = MUSIC_DUR[music_pos];
+  ++music_pos;
+  if (music_pos >= MUSIC_LEN) music_pos = 0;
+}
+
+// ============================================
 //  КАРТЫ УРОВНЕЙ (вид сбоку)
 //  '#' стена/платформа, 'B' коробка, 'K' кроватка,
 //  'w' окно, 'r' коврик, 'h' сердечко на обоях
@@ -625,6 +684,7 @@ void main(void) {
   draw_title();
   while (1) {
     if (pad_trigger(0) & (PAD_A | PAD_START)) break;
+    music_update();
     ppu_wait_nmi();
   }
   scene = 0;
@@ -745,6 +805,7 @@ void main(void) {
         draw_title();
         while (1) {
           if (pad_trigger(0) & (PAD_A | PAD_START)) break;
+          music_update();
           ppu_wait_nmi();
         }
         draw_card();
@@ -793,6 +854,7 @@ void main(void) {
     }
 
     sfx_update();
+    music_update();
     ppu_wait_nmi();
   }
 }
