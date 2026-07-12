@@ -775,26 +775,14 @@ void update_pet(void) {
 unsigned char minigame_stage = MG_BIKE;
 unsigned char minigames_done = 0;
 
-#define MG_BIKE_A   0x01
-#define MG_BIKE_B   0x02
-#define MG_OBSTACLE 0x03
+// Фоновые тайлы мини-игр во втором банке. Спрайты (Даня, папа, мяч,
+// коробки, цифры счёта) -- обычные, из первого банка.
 #define MG_ROAD     0x04
 #define MG_LANE     0x05
-#define MG_PADDLE   0x06
 #define MG_NET      0x07
-#define MG_BALL     0x08
 #define MG_GOAL_L   0x09
 #define MG_GOAL_R   0x0A
-#define MG_KEEPER_A 0x0B
-#define MG_KEEPER_B 0x0C
-#define MG_FBALL    0x0D
 #define MG_GRASS    0x0E
-
-const unsigned char MG_TITLE[3][20] = {
-  "VELOGONKA!         ",   // ВЕЛОГОНКА!
-  "TENNIS!             ",  // ТЕННИС!
-  "FUTBOL!             "   // ФУТБОЛ!
-};
 
 // Рисует экран-заглушку перед мини-игрой (обычным, первым банком).
 void draw_minigame_intro(void) {
@@ -913,7 +901,7 @@ void draw_bike(void) {
     oam_id = draw_person(BIKE_LANE_X[bike_lane], BIKE_Y, HERO_HEAD, HERO_BODY, 0, oam_id);
   }
   for (i = 0; i < N_OBST; ++i) {
-    if (obst_y[i] >= -8 && obst_y[i] < 224) {
+    if (obst_y[i] >= 0 && obst_y[i] < 224) {
       oam_id = oam_spr(BIKE_LANE_X[obst_lane[i]], (unsigned char)obst_y[i],
                         T_BOX, 2, oam_id);
     }
@@ -1035,7 +1023,9 @@ unsigned char update_football(unsigned char pad, unsigned char pad_t) {
     }
   }
 
-  if (t & 1) {
+  // Вратарь переходит на соседнюю полосу раз в четверть секунды --
+  // достаточно медленно, чтобы шестилетка успел прицелиться в пустой угол.
+  if ((t & 15) == 0) {
     if (foot_keeper_dir > 0) {
       if (foot_keeper_lane < 2) ++foot_keeper_lane; else foot_keeper_dir = -1;
     } else {
@@ -1275,6 +1265,8 @@ void main(void) {
       // ===== ФИНАЛ: START -- начать заново =====
       if (pad_t & PAD_START) {
         for (i = 0; i < N_ITEMS; ++i) item_taken[i] = 0;
+        for (i = 0; i < N_LEVELS; ++i) secret_taken[i] = 0;
+        secret_total = 0;
         level = 0;
         minigames_done = 0;
         scene = 0;
