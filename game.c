@@ -18,15 +18,31 @@
 #define T_BOX     0xA3     // коробка (можно стоять)
 #define T_CHECKER 0xE4     // сине-белый кафель (кухня): и стена, и пол
 #define T_STARS   0xE5     // ночное небо в белых звёздах (улица)
-#define T_SOFA_L  0xE6     // диван -- подлокотник слева (гостиная)
-#define T_SOFA_M  0xE7     // диван -- спинка и сиденье
-#define T_SOFA_R  0xE8     // диван -- подлокотник справа
-#define T_LAMP    0xE9     // торшер (гостиная)
-#define T_CABINET 0xEA     // шкафчик (кухня, повторяется)
-#define T_STOVE   0xEB     // плита (кухня)
-#define T_FENCE   0xEC     // забор (улица, повторяется)
-#define T_MOON    0xED     // луна (улица)
-#define T_SHELF   0xEE     // полка с игрушкой (детская)
+// Мебель покрупнее -- каждый предмет теперь из нескольких тайлов.
+#define T_SOFA_TL  0xE6    // диван 3x2 (гостиная)
+#define T_SOFA_TM  0xE7
+#define T_SOFA_TR  0xE8
+#define T_SOFA_BL  0xE9
+#define T_SOFA_BM  0xEA
+#define T_SOFA_BR  0xEB
+#define T_LAMP_TOP 0xEC    // торшер 1x2 (гостиная)
+#define T_LAMP_BOT 0xED
+#define T_CAB_TL   0xEE    // шкафчик 2x2 (кухня)
+#define T_CAB_TR   0xEF
+#define T_CAB_BL   0xF0
+#define T_CAB_BR   0xF1
+#define T_STOVE_TL 0xF2    // плита 2x2 (кухня)
+#define T_STOVE_TR 0xF3
+#define T_STOVE_BL 0xF4
+#define T_STOVE_BR 0xF5
+#define T_FENCE_T  0xF6    // забор 1x2, повторяется (улица)
+#define T_FENCE_B  0xF7
+#define T_MOON_TL  0xF8    // луна 2x2 (улица)
+#define T_MOON_TR  0xF9
+#define T_MOON_BL  0xFA
+#define T_MOON_BR  0xFB
+#define T_SHELF_L  0xFC    // полка 2x1 (детская)
+#define T_SHELF_R  0xFD
 #define HERO_HEAD 0xA4
 #define HERO_BODY 0xA5
 #define T_STROL_L 0xB4     // коляска: левая половина
@@ -334,8 +350,8 @@ const char MAP_L1[30][33] = {
   "#..............................#",
   "#..............................#",
   "#.....######..........######...#",
-  "#.....................d........#",
-  "#..BB..................abc......",
+  "#...................abc..g.....#",
+  "#..BB...............def..i......",
   "################################",
   "################################",
   "################################"
@@ -350,7 +366,7 @@ const char MAP_L2[30][33] = {
   "#....ww........................#",
   "#....ww........................#",
   "#........................h.....#",
-  "#..............n...............#",
+  "#..............nN..............#",
   "#..............................#",
   "#..............................#",
   "#..............................#",
@@ -400,18 +416,16 @@ const char MAP_L3[30][33] = {
   "#.........######...............#",
   "#..............................#",
   "#..............................#",
-  "#....BB.........................",
-  "#....BB.............eee.f.......",
+  "#....BB.............jk.pq.......",
+  "#....BB.............lo.st.......",
   "################################",
   "################################",
   "################################"
 };
 // --- Уровень 4: УЛИЦА (ночь, звёзды) ---
 const char MAP_L4[30][33] = {
-  "#..............................#",
-  "#..........................m...#",
-  "#..............................#",
-  "#..............................#",
+  "#.........................xy...#",
+  "#.........................zZ...#",
   "#..............................#",
   "#..............................#",
   "#..............................#",
@@ -433,8 +447,10 @@ const char MAP_L4[30][33] = {
   "#..............................#",
   "#..............................#",
   "#..............................#",
-  "#............BB..........BB....#",
-  "#.gggg..B....BB.....B....BB....#",
+  "#..............................#",
+  "#..............................#",
+  "#.uuuu.......BB..........BB....#",
+  "#.vvvv..B....BB.....B....BB....#",
   "################################",
   "################################",
   "################################"
@@ -484,15 +500,30 @@ void draw_room(void) {
       else if (t == 'w') buf[col] = T_WINDOW;
       else if (t == 'r') buf[col] = T_RUG;
       else if (t == 'h') buf[col] = 0x2A;   // сердечко: тайл звёздочки '*'
-      else if (t == 'a') buf[col] = T_SOFA_L;
-      else if (t == 'b') buf[col] = T_SOFA_M;
-      else if (t == 'c') buf[col] = T_SOFA_R;
-      else if (t == 'd') buf[col] = T_LAMP;
-      else if (t == 'e') buf[col] = T_CABINET;
-      else if (t == 'f') buf[col] = T_STOVE;
-      else if (t == 'g') buf[col] = T_FENCE;
-      else if (t == 'm') buf[col] = T_MOON;
-      else if (t == 'n') buf[col] = T_SHELF;
+      else if (t == 'a') buf[col] = T_SOFA_TL;
+      else if (t == 'b') buf[col] = T_SOFA_TM;
+      else if (t == 'c') buf[col] = T_SOFA_TR;
+      else if (t == 'd') buf[col] = T_SOFA_BL;
+      else if (t == 'e') buf[col] = T_SOFA_BM;
+      else if (t == 'f') buf[col] = T_SOFA_BR;
+      else if (t == 'g') buf[col] = T_LAMP_TOP;
+      else if (t == 'i') buf[col] = T_LAMP_BOT;
+      else if (t == 'j') buf[col] = T_CAB_TL;
+      else if (t == 'k') buf[col] = T_CAB_TR;
+      else if (t == 'l') buf[col] = T_CAB_BL;
+      else if (t == 'o') buf[col] = T_CAB_BR;
+      else if (t == 'p') buf[col] = T_STOVE_TL;
+      else if (t == 'q') buf[col] = T_STOVE_TR;
+      else if (t == 's') buf[col] = T_STOVE_BL;
+      else if (t == 't') buf[col] = T_STOVE_BR;
+      else if (t == 'u') buf[col] = T_FENCE_T;
+      else if (t == 'v') buf[col] = T_FENCE_B;
+      else if (t == 'x') buf[col] = T_MOON_TL;
+      else if (t == 'y') buf[col] = T_MOON_TR;
+      else if (t == 'z') buf[col] = T_MOON_BL;
+      else if (t == 'Z') buf[col] = T_MOON_BR;
+      else if (t == 'n') buf[col] = T_SHELF_L;
+      else if (t == 'N') buf[col] = T_SHELF_R;
       else               buf[col] = floor;
     }
     vram_adr(NTADR_A(0, row));
