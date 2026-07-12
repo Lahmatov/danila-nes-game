@@ -13,9 +13,11 @@
 //#link "chr_ru.s"         // наш набор тайлов: буквы + вся графика игры
 
 // --- Номера тайлов ---
-#define T_WALL    0xA1     // кирпич
-#define T_FLOOR   0xA2     // фон комнаты / звёзды на улице
+#define T_WALL    0xA1     // кирпич (гостиная)
+#define T_FLOOR   0xA2     // фон комнаты в точку (гостиная, детская)
 #define T_BOX     0xA3     // коробка (можно стоять)
+#define T_CHECKER 0xE4     // сине-белый кафель (кухня): и стена, и пол
+#define T_STARS   0xE5     // ночное небо в белых звёздах (улица)
 #define HERO_HEAD 0xA4
 #define HERO_BODY 0xA5
 #define T_STROL_L 0xB4     // коляска: левая половина
@@ -31,10 +33,10 @@
 const unsigned char PALETTE[32] = {
   0x0F,                   // общий цвет фона: чёрный
 
-  0x27,0x17,0x30,0x00,    // фон 0: кирпич, тёмный, белый (текст)
+  0x27,0x17,0x30,0x00,    // фон 0: гостиная -- тёплый кирпич, тёмный, белый (текст)
   0x28,0x36,0x30,0x00,    // фон 1: портрет
-  0x00,0x10,0x20,0x00,    // фон 2
-  0x06,0x16,0x26,0x00,    // фон 3
+  0x24,0x21,0x30,0x00,    // фон 2: детская -- розовый, мягкий синий, белый
+  0x11,0x30,0x30,0x00,    // фон 3: кухня -- синий кафель, белый, белый
 
   0x2A,0x36,0x30,0x00,    // спрайты 0: Данила -- зелёный, кожа, белый-блонд
   0x25,0x36,0x17,0x00,    // спрайты 1: мама Карина -- розовый, кожа, КОРИЧНЕВЫЕ волосы
@@ -73,6 +75,13 @@ const char* LEVEL_NAME[N_LEVELS] = {
 };
 const unsigned char LEVEL_NAME_COL[N_LEVELS] = { 12, 12, 13, 13 };
 const unsigned char LEVEL_SPEAKER[N_LEVELS]  = { 0, 1, 2, 3 };
+
+// У каждой комнаты свой облик: тайл стены, тайл фона и цветовая палитра
+// (индекс фоновой палитры 0..3 из PALETTE), чтобы комнаты узнавались
+// с первого взгляда, а не были одинаковым кирпичом с точками.
+const unsigned char LEVEL_WALL[N_LEVELS]  = { T_WALL,  T_WALL,  T_CHECKER, T_WALL  };
+const unsigned char LEVEL_FLOOR[N_LEVELS] = { T_FLOOR, T_FLOOR, T_FLOOR,   T_STARS };
+const unsigned char LEVEL_BGPAL[N_LEVELS] = { 0,       2,       3,         0       };
 const char* LEVEL_LINE[N_LEVELS][2] = {
   { "SOBERI VEQI DLYA MALYWKI!",   // СОБЕРИ ВЕЩИ ДЛЯ МАЛЫШКИ!
     "PRYGAJ KNOPKOJ A!" },         // ПРЫГАЙ КНОПКОЙ А!
@@ -449,26 +458,30 @@ unsigned char is_wall(unsigned char px, unsigned char py) {
 }
 
 // Рисует уровень: каждому символу карты -- свой тайл.
+// Стена, фон и палитра берутся из LEVEL_WALL/LEVEL_FLOOR/LEVEL_BGPAL --
+// у каждой комнаты свой облик.
 void draw_room(void) {
   unsigned char row, col, t;
   unsigned char buf[32];
+  unsigned char wall  = LEVEL_WALL[level];
+  unsigned char floor = LEVEL_FLOOR[level];
   ppu_off();
   for (row = 0; row < 30; ++row) {
     for (col = 0; col < 32; ++col) {
       t = map_at(row, col);
-      if (t == '#')      buf[col] = T_WALL;
+      if (t == '#')      buf[col] = wall;
       else if (t == 'B') buf[col] = T_BOX;
       else if (t == 'K') buf[col] = T_CRIB;
       else if (t == 'w') buf[col] = T_WINDOW;
       else if (t == 'r') buf[col] = T_RUG;
       else if (t == 'h') buf[col] = 0x2A;   // сердечко: тайл звёздочки '*'
-      else               buf[col] = T_FLOOR;
+      else               buf[col] = floor;
     }
     vram_adr(NTADR_A(0, row));
     vram_write(buf, 32);
   }
   vram_adr(0x23C0);
-  vram_fill(0, 64);
+  vram_fill(LEVEL_BGPAL[level] * 0x55, 64);
   ppu_on_all();
 }
 
