@@ -43,6 +43,21 @@
 #define T_MOON_BR  0xFB
 #define T_SHELF_L  0xFC    // полка 2x1 (детская)
 #define T_SHELF_R  0xFD
+#define T_TV_TL    0x61    // телевизор 2x2 (гостиная)
+#define T_TV_TR    0x62
+#define T_TV_BL    0x63
+#define T_TV_BR    0x64
+#define T_FRIDGE_TL 0x65   // холодильник 2x3 (кухня)
+#define T_FRIDGE_TR 0x66
+#define T_FRIDGE_ML 0x67
+#define T_FRIDGE_MR 0x68
+#define T_FRIDGE_BL 0x69
+#define T_FRIDGE_BR 0x6A
+#define T_LAMPPOST_TOP 0x6B  // фонарь 1x3 (улица)
+#define T_LAMPPOST_MID 0x6C
+#define T_LAMPPOST_BOT 0x6D
+#define T_MOBILE_L 0x6E    // мобиль 2x1 (детская)
+#define T_MOBILE_R 0x6F
 #define HERO_HEAD 0xA4
 #define HERO_BODY 0xA5
 #define T_STROL_L 0xB4     // коляска: левая половина
@@ -344,8 +359,8 @@ const char MAP_L1[30][33] = {
   "#..............................#",
   "#..............................#",
   "#..............................#",
-  "#..............................#",
-  "#..............................#",
+  "#.mM...........................#",
+  "#.AC...........................#",
   "#.............######...........#",
   "#..............................#",
   "#..............................#",
@@ -382,7 +397,7 @@ const char MAP_L2[30][33] = {
   "#...........######.............#",
   "#..............................#",
   "#..............................#",
-  "#...######.....................#",
+  "#...######...............PQ....#",
   "#.......................KKK....#",
   "#.......rrrrrrr.........KKK....#",
   "################################",
@@ -413,9 +428,9 @@ const char MAP_L3[30][33] = {
   "#.................######.......#",
   "#..............................#",
   "#..............................#",
-  "#.........######...............#",
-  "#..............................#",
-  "#..............................#",
+  "#.........######...........DE..#",
+  "#..........................FG..#",
+  "#..........................HI..#",
   "#....BB.............jk.pq.......",
   "#....BB.............lo.st.......",
   "################################",
@@ -448,9 +463,9 @@ const char MAP_L4[30][33] = {
   "#..............................#",
   "#..............................#",
   "#..............................#",
-  "#..............................#",
-  "#.uuuu.......BB..........BB....#",
-  "#.vvvv..B....BB.....B....BB....#",
+  "#............................J.#",
+  "#.uuuu.......BB..........BB..L.#",
+  "#.vvvv..B....BB.....B....BB..O.#",
   "################################",
   "################################",
   "################################"
@@ -524,6 +539,21 @@ void draw_room(void) {
       else if (t == 'Z') buf[col] = T_MOON_BR;
       else if (t == 'n') buf[col] = T_SHELF_L;
       else if (t == 'N') buf[col] = T_SHELF_R;
+      else if (t == 'm') buf[col] = T_TV_TL;
+      else if (t == 'M') buf[col] = T_TV_TR;
+      else if (t == 'A') buf[col] = T_TV_BL;
+      else if (t == 'C') buf[col] = T_TV_BR;
+      else if (t == 'D') buf[col] = T_FRIDGE_TL;
+      else if (t == 'E') buf[col] = T_FRIDGE_TR;
+      else if (t == 'F') buf[col] = T_FRIDGE_ML;
+      else if (t == 'G') buf[col] = T_FRIDGE_MR;
+      else if (t == 'H') buf[col] = T_FRIDGE_BL;
+      else if (t == 'I') buf[col] = T_FRIDGE_BR;
+      else if (t == 'J') buf[col] = T_LAMPPOST_TOP;
+      else if (t == 'L') buf[col] = T_LAMPPOST_MID;
+      else if (t == 'O') buf[col] = T_LAMPPOST_BOT;
+      else if (t == 'P') buf[col] = T_MOBILE_L;
+      else if (t == 'Q') buf[col] = T_MOBILE_R;
       else               buf[col] = floor;
     }
     vram_adr(NTADR_A(0, row));
