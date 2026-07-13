@@ -1020,6 +1020,7 @@ unsigned char update_football(unsigned char pad, unsigned char pad_t) {
       foot_phase = 1;
       foot_ball_y = FOOT_BALL_Y0;
       sfx_start(SFX_JUMP);
+      return 0;   // в кадре удара мяч ещё у ноги, летит со следующего
     }
   }
 
