@@ -58,6 +58,10 @@
 #define T_LAMPPOST_BOT 0x6D
 #define T_MOBILE_L 0x6E    // мобиль 2x1 (детская)
 #define T_MOBILE_R 0x6F
+// Дверь-выход 2x2 у правого края: закрыта, пока не собраны все вещи
+// уровня, потом открывается. 4 тайла подряд: TL, TR, BL, BR.
+#define T_DOOR_CLOSED 0x70
+#define T_DOOR_OPEN   0x74
 #define HERO_HEAD 0xA4
 #define HERO_BODY 0xA5
 #define T_STROL_L 0xB4     // коляска: левая половина
@@ -558,6 +562,17 @@ void draw_room(void) {
     }
     vram_adr(NTADR_A(0, row));
     vram_write(buf, 32);
+  }
+  // Дверь-выход у правого края (колонки 30-31, ряды 25-26): закрыта,
+  // пока не собраны все вещи уровня, потом открывается -- видно, куда идти.
+  {
+    unsigned char d = (lvl_found >= lvl_total) ? T_DOOR_OPEN : T_DOOR_CLOSED;
+    vram_adr(NTADR_A(30, 25));
+    vram_put(d);
+    vram_put(d + 1);
+    vram_adr(NTADR_A(30, 26));
+    vram_put(d + 2);
+    vram_put(d + 3);
   }
   vram_adr(0x23C0);
   vram_fill(LEVEL_BGPAL[level] * 0x55, 64);
@@ -1151,7 +1166,10 @@ void main(void) {
       on_ground = is_wall(hero_x, hero_y + 8) || is_wall(hero_x + 7, hero_y + 8);
       if (on_ground) {
         if (vy > 0) { vy = 0; vsub = 0; }
-        if (pad_t & PAD_A) { vy = -52; sfx_start(SFX_JUMP); }        // прыжок
+        // Прыжок: -56 даёт пик ~33px -- запас в целый тайл над
+        // платформами через 3 ряда (с -52 запас был всего 5px,
+        // шестилетке почти не попасть).
+        if (pad_t & PAD_A) { vy = -56; sfx_start(SFX_JUMP); }
       } else {
         vy += 3;                            // гравитация
         if (vy > 64) vy = 64;
@@ -1296,13 +1314,21 @@ void main(void) {
       oam_id = oam_spr(pet_x, pet_y, (t & 16) ? PET_B : PET_A,
                         2 | (pet_facing ? OAM_FLIP_H : 0), oam_id);
       oam_id = oam_spr(hazard_x, HAZARD_Y[level], T_BALL, 1, oam_id);
+      // Несобранные предметы переливаются двумя палитрами (рыжая <->
+      // зелёно-белая), чтобы их было видно на любом тёмном фоне --
+      // мишка в одной рыжей палитре терялся.
       for (i = 0; i < N_ITEMS; ++i) {
         if (!item_taken[i] && ITEM_LEVEL[i] == level) {
-          oam_id = oam_spr(ITEM_X[i], ITEM_Y[i], ITEM_TILE[i], 2, oam_id);
+          oam_id = oam_spr(ITEM_X[i], ITEM_Y[i], ITEM_TILE[i],
+                            (t & 16) ? 2 : 0, oam_id);
         }
       }
       if (!secret_taken[level] && (t & 8)) {   // мерцает -- всё-таки секрет
         oam_id = oam_spr(SECRET_X[level], SECRET_Y[level], T_SECRET, 2, oam_id);
+      }
+      // Все вещи собраны: над открытой дверью мигает звёздочка-маячок.
+      if (lvl_found == lvl_total && (t & 8)) {
+        oam_id = oam_spr(240, 192, T_SECRET, 0, oam_id);
       }
       oam_id = oam_spr(16, 16, '0' + lvl_found, 0, oam_id);
       oam_id = oam_spr(24, 16, '/', 0, oam_id);

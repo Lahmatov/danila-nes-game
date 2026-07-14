@@ -350,6 +350,23 @@ static void test_football(void) {
   ASSERT_EQ("6 попыток -- тоже завершение", update_football(0, 0), 1);
 }
 
+// Дверь-выход: закрыта до сбора всех вещей, открыта после.
+static void test_exit_door(void) {
+  level = 0;
+  start_level();   // lvl_found=0 < lvl_total -> закрытая дверь
+  ASSERT_EQ("дверь закрыта: верх-лево",  vram_mem[NTADR_A(30, 25)], T_DOOR_CLOSED);
+  ASSERT_EQ("дверь закрыта: верх-право", vram_mem[NTADR_A(31, 25)], T_DOOR_CLOSED + 1);
+  ASSERT_EQ("дверь закрыта: низ-лево",   vram_mem[NTADR_A(30, 26)], T_DOOR_CLOSED + 2);
+  ASSERT_EQ("дверь закрыта: низ-право",  vram_mem[NTADR_A(31, 26)], T_DOOR_CLOSED + 3);
+
+  lvl_found = lvl_total;
+  draw_room();     // так дверь перерисовывается после сбора последней вещи
+  ASSERT_EQ("дверь открыта: верх-лево",  vram_mem[NTADR_A(30, 25)], T_DOOR_OPEN);
+  ASSERT_EQ("дверь открыта: низ-право",  vram_mem[NTADR_A(31, 26)], T_DOOR_OPEN + 3);
+  level = 0;
+  start_level();
+}
+
 // Подбор предмета и секрета: та же формула пересечения, что в main().
 static void test_overlap_formula(void) {
   // Повторяем выражение из main() дословно, с данными предмета 0.
@@ -376,6 +393,7 @@ int main(void) {
   test_bike();
   test_tennis();
   test_football();
+  test_exit_door();
   test_overlap_formula();
 
   printf("%s: %d проверок, %d упало\n", fails ? "ПРОВАЛ" : "OK", checks, fails);
